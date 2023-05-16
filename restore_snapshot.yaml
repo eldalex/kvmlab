@@ -1,0 +1,30 @@
+- name: Восстановление KVM-машины из снимка
+  hosts: localhost
+  become: true
+
+  tasks:
+    - name: Получаем параметры для создания ВМ
+      include_vars:
+        file: vm_names_debian.yml
+        name: vm_info
+
+    - name: Восстановление KVM-машины из снимка
+      command: virsh snapshot-revert {{ item.name }} start
+      async: 300
+      poll: 0
+      with_items: "{{ vm_info.vm_names }}"
+      register: snapshot_revert_status
+
+    - name: Проверка статуса задач восстановления
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: snapshot_revert_results
+      until: snapshot_revert_results.finished
+      retries: 30
+      delay: 10
+      with_items: "{{ snapshot_revert_status.results }}"
+
+    - name: Вывод результатов восстановления
+      debug:
+        msg: "Задача восстановления для {{ item.item.name }} выполнена: {{ item.finished }}"
+      with_items: "{{ snapshot_revert_results.results | map(attribute='item') | list }}"

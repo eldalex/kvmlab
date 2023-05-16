@@ -1,0 +1,36 @@
+---
+# tasks file for debian_11_provision, установка cri-o
+- name: Установка ключа репозитория cri-o
+  apt_key:
+    url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/{{ version }}/{{ os }}/Release.key
+    state: present
+
+- name: Установка репозитория cri-o
+  apt_repository:
+    repo: 'deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{ os }}/ /'
+    filename: devel:kubic:libcontainers:stable.list
+
+- name: Установка репозитория cri-ostable/cri-o
+  apt_repository:
+    repo: 'deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/{{ version }}/{{ os }}/ /'
+    filename: 'devel:kubic:libcontainers:stable:cri-o:{{ version }}.list'
+
+- name: Установка cri-o
+  apt:
+    name: ['cri-o', 'cri-o-runc']
+    state: latest
+
+- name: Создание каталога /var/lib/crio
+  file:
+    path: /var/lib/crio
+    state: directory
+    
+- name: Перезагрузка systemd
+  systemd:
+    daemon_reload: yes
+
+- name: запуск служб crio
+  systemd:
+    name: crio
+    enabled: yes
+    state: started

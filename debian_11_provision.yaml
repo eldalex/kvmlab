@@ -1,0 +1,193 @@
+---
+- name: Развёртывание ВМ из облачного образа
+  hosts: localhost
+  gather_facts: yes
+  become: yes
+  vars:
+    pool_dir: "/home/alex/myStorage/storage_for_VMs/"
+    net: vmnet
+    ssh_pub_key: "/home/alex/.ssh/id_rsa.pub"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+  tasks:
+    - name: Подготовка окружения
+      package:
+        name:
+          - libguestfs-tools
+          - python3-libvirt
+        state: present
+
+    - name: Получаем параметры для создания ВМ
+      include_vars:
+        file: vm_names_debian.yml
+        name: vm_info
+    
+    - name: Подготовка шаблона для ВМ
+      include_role:
+        name: debian_11_provision
+        tasks_from: prepare_images_for_cluster.yml
+      vars:
+        libvirt_pool_dir: "{{ pool_dir }}"
+        ssh_key: "{{ ssh_pub_key }}"
+
+    - name: Создание ВМ нод из шаблонного образа.
+      include_role:
+        name: debian_11_provision
+        tasks_from: create_nodes.yml
+      vars:
+        libvirt_pool_dir: "{{ pool_dir }}"
+        vm_name: "{{ item.name }}"
+        vm_vcpus: "{{ item.cpu }}"
+        vm_ram_mb: "{{ item.memory }}"
+        ipaddr: "{{ item.ipaddr }}"
+        vm_net: "{{ net }}"
+      with_items: "{{ vm_info.vm_names }}"
+
+- name: Проверка доступности ВМ
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ожидание загрузки всех ВМ из списка
+      wait_for:
+        host: "{{ hostvars[item].ansible_host }}"
+        port: 22
+        timeout: 300
+        state: started
+      with_items: "{{ groups['all'] | sort }}"
+
+- name: Установка движка контейнеризации [cri-o, container-d, docker]
+  hosts: all
+  gather_facts: true
+  become: true
+  remote_user: root
+  vars:
+    version: "1.26"
+    os: "Debian_11"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    engine: container-d # один вариант из:[cri-o, container-d, docker]
+  tasks:
+    - name: Установка cri-o
+      include_role:
+        name: debian_11_provision
+        tasks_from: install_crio.yml
+      when: engine == "cri-o"
+    - name: Установка container-d
+      include_role:
+        name: debian_11_provision
+        tasks_from: install_container_d.yml
+      when: engine == "container-d"
+    - name: Установка docker cri
+      include_role:
+        name: debian_11_provision
+        tasks_from: install_docker_cri.yml
+      when: engine == "docker"
+
+- name: Создаем снапшоты
+  hosts: localhost
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Получаем данныые
+      include_vars:
+        file: vm_names_debian.yml
+        name: vm_info
+
+    - name: Создаем снимки
+      include_role:
+        name: debian_11_provision
+        tasks_from: create_snapshot.yml
+      vars:
+        vm_name: "{{ item.name }}"
+      with_items: "{{ vm_info.vm_names }}"
+
+- name: Настройка kubernetes [all-in-one либо ha-cluster]
+  hosts: all
+  gather_facts: true
+  become: true
+  remote_user: root
+  vars:
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    variant: ha-cluster
+    engine: container_d
+    hostname: "{{ inventory_hostname }}"
+  tasks:
+    - name: Установка all-in-one
+      include_role:
+        name: debian_11_provision
+        tasks_from: all_in_one.yml
+      when: variant == "all-in-one"
+
+    - name: Установка ha-cluster
+      include_role:
+        name: debian_11_provision
+        tasks_from: ha_cluster_prepare_managers.yml
+      when: variant == "ha-cluster"
+
+    - name: Установка первой ноды
+      include_role:
+        name: debian_11_provision
+        tasks_from: ha_cluster_first_node.yml
+      when: variant == "ha-cluster" and inventory_hostname == 'node1' and inventory_hostname in groups['management']
+      register: first_node_result
+
+
+    - name: Передача значения команды добавления первой ноды остальным нодам
+      set_fact:
+        control_plane_join_command: "{{ hostvars['node1']['control_plane_join_command'] }}"
+        worker_join_command: "{{ hostvars['node1']['worker_join_command'] }}"
+      when: variant == "ha-cluster" and inventory_hostname != 'node1'
+
+    - name: Использование команды control_plane_join_command
+      ansible.builtin.shell:
+        cmd: "{{ control_plane_join_command }}"
+      retries: 5
+      delay: 30
+      when: variant == "ha-cluster" and inventory_hostname != 'node1' and inventory_hostname in groups['management']
+      loop: "{{ groups['management'] }}"
+      loop_control:
+        loop_var: management_host
+      delegate_to: "{{ management_host }}"
+      
+    - name: Использование команды worker_join_command
+      ansible.builtin.shell:
+        cmd: "{{ worker_join_command }}"
+      retries: 5
+      delay: 30
+      when: variant == "ha-cluster" and inventory_hostname != 'node1' and inventory_hostname in groups['workers']
+
+    - name: Перезагрузка всех машин
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+
+- name: Скачивание конфига с первой ноды (подходит для обоих вариантов all-in-one и ha-cluster)
+  hosts: node1
+  remote_user: root
+  tasks:
+    - name: Скачать файл
+      ansible.builtin.fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: /tmp/
+        flat: yes
+        force: yes
+
+- name: Настройка хостовой машины, чтобы не лазить постоянно на виртуальные.
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Переместить файл
+      ansible.builtin.file:
+        src: /tmp/admin.conf
+        dest: /etc/kubernetes/admin.conf
+        state: link
+        force: yes
+      become: true
+
+    - name: Установка KUBECONFIG в enviroment
+      lineinfile:
+        dest: /etc/environment
+        line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+
+    - name: Установка KUBECONFIG в bashrc
+      lineinfile:
+        dest: '~/.bashrc'
+        line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'

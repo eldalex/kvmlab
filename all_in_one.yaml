@@ -1,0 +1,58 @@
+---
+- name: All in One Node instalation (crio or containerD)
+  hosts: node1
+  gather_facts: true
+  become: true
+  remote_user: root
+
+  tasks:
+    - name: Тестовый старт роли, вывод whoami
+      shell: "whoami && pwd && hostname"
+      register: result_whoamix2
+
+    - name: Вывод result_whoamix2
+      debug:
+            var: result_whoamix2.stdout_lines
+      when: result_whoamix2 is defined
+
+    - name: Тестовый старт роли, вывод whoami
+      shell: "whoami && pwd && hostname"
+      become: true
+      register: result_whoamix3
+
+    - name: Вывод result_whoamix3
+      debug:
+            var: result_whoamix3.stdout_lines
+      when: result_whoamix2 is defined
+
+    - name: Проверка был ли инициализирован кластер путём проверки нод
+      shell: kubectl get nodes
+      register: kubectl_output
+      ignore_errors: true
+
+    - name: Инициализация кластера если проверка не определила наличие нод.
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+      register: kubeadm_output
+      when: kubectl_output.rc != 0
+      ignore_errors: true
+
+    - name: Set up kubeconfig environment variable
+      lineinfile:
+        dest: /etc/environment
+        line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+
+    - name: Set up current session kubeconfig variable
+      shell: export KUBECONFIG=/etc/kubernetes/admin.conf
+
+    - name: Wait for Kubernetes components to start
+      wait_for:
+        host: localhost
+        port: 6443
+        timeout: 300
+
+    - name: Deploy Flannel CNI network plugin
+      shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+    - name: Taint control plane nodes
+      shell: kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+      become: true

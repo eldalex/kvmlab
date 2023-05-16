@@ -1,0 +1,48 @@
+---
+# tasks file for debian_11_provision, создание нод
+- name: Получаем список существующих ВМ
+  community.libvirt.virt:
+    command: list_vms
+  register: existing_vms
+  changed_when: no
+
+- name: Создание ВМ если её имени нет в списке
+  block:
+
+  - name: Копирование шаблонного образа в хранилище
+    copy:
+      dest: "{{ libvirt_pool_dir }}/{{ vm_name }}.qcow2"
+      src: "{{ libvirt_pool_images }}/template_with_common_settings.qcow2"
+      force: no
+      remote_src: yes 
+      mode: 0660
+    register: copy_results
+  
+  - name: Изменение размера виртуального диска
+    shell: "qemu-img resize {{ libvirt_pool_dir }}/{{ vm_name }}.qcow2 10G"
+
+
+  - name: Начальное конфигурирование hostname:{{ vm_name }}, ip:{{ ipaddr }}
+    command: |
+      virt-customize -a {{ libvirt_pool_dir }}/{{ vm_name }}.qcow2 \
+      --hostname {{ vm_name }}.internal \
+      --run-command 'echo "source /etc/network/interfaces.d/*\nauto lo\niface lo inet loopback\nauto enp1s0\niface enp1s0 inet static\naddress {{ ipaddr }}\nnetmask 255.255.255.0\ngateway 172.30.0.1\ndns-nameservers 172.30.0.1" > /etc/network/interfaces'
+      --run-command 'ssh-keygen -A'
+
+    when: copy_results is changed
+
+  - name: Создание ВМ из шаблона
+    community.libvirt.virt:
+      command: define
+      xml: "{{ lookup('template', 'vm-template.xml.j2') }}"
+      
+  when: "vm_name not in existing_vms.list_vms"
+
+- name: Включение ВМ
+  community.libvirt.virt:
+    name: "{{ vm_name }}"
+    state: running
+  register: vm_start_results
+  until: "vm_start_results is success"
+  retries: 15
+  delay: 2

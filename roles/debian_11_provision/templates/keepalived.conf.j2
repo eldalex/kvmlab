@@ -1,0 +1,28 @@
+global_defs {
+    enable_script_security
+    script_user nobody
+}
+
+vrrp_script check_apiserver {
+  script "/etc/keepalived/check_apiserver.sh"
+  interval 3
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface enp1s0
+    virtual_router_id 5
+    priority 100
+    advert_int 1
+    nopreempt
+    authentication {
+        auth_type PASS
+        auth_pass ZqSj#f1G
+    }
+    virtual_ipaddress {
+        172.30.0.210
+    }
+    track_script {
+        check_apiserver
+    }
+}

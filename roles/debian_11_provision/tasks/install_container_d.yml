@@ -1,0 +1,75 @@
+---
+# tasks file for debian_11_provision, установка container-d
+- name: Скачиваем containerd
+  get_url:
+    url: "https://github.com/containerd/containerd/releases/download/v1.7.0/containerd-1.7.0-linux-amd64.tar.gz"
+    dest: "/tmp/containerd-1.7.0-linux-amd64.tar.gz"
+
+- name: Распаковываем архив
+  unarchive:
+    src: /tmp/containerd-1.7.0-linux-amd64.tar.gz
+    dest: /usr/local
+    copy: no
+
+- name: Удаляем скачаный архив за ненадобностю
+  file:
+    path: "/tmp/containerd-1.7.0-linux-amd64.tar.gz"
+    state: absent
+
+- name: Создание директории для конфигурации containerd
+  file:
+    path: /etc/containerd/
+    state: directory
+
+- name: Проверяем создан ли каталог
+  stat:
+    path: /etc/containerd
+  register: containerd_dir
+
+- name: Создание конфиг файла containerd
+  become: true
+  command: "sh -c 'containerd config default > /etc/containerd/config.toml'"
+  when: containerd_dir.stat.exists
+
+- name: конфигурирование cgroup driver
+  replace:
+    path: "/etc/containerd/config.toml"
+    regexp: "SystemdCgroup = false"
+    replace: "SystemdCgroup = true"
+
+- name: Скачиваем containerd systemd service file
+  get_url:
+    url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service"
+    dest: "/etc/systemd/system/containerd.service"
+
+- name: Скачиваем и устанавливаем runc
+  get_url:
+    url: "https://github.com/opencontainers/runc/releases/download/v1.1.4/runc.amd64"
+    dest: "/usr/local/sbin/runc"
+    mode: "u+x"
+
+- name: Скачиваем CNI plugins
+  get_url:
+    url: "https://github.com/containernetworking/plugins/releases/download/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz"
+    dest: "/tmp/cni-plugins-linux-amd64-v1.2.0.tgz"
+
+- name: Распаковываем CNI plugins archive
+  unarchive:
+    src: "/tmp/cni-plugins-linux-amd64-v1.2.0.tgz"
+    dest: "/opt/cni/bin"
+    copy: no
+
+- name: Удаляем CNI plugins archive
+  file:
+    path: "/tmp/cni-plugins-linux-amd64-v1.2.0.tgz"
+    state: absent
+
+- name: Перезагрузка systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Запуск и активация containerd service
+  systemd:
+    name: containerd
+    state: started
+    enabled: yes

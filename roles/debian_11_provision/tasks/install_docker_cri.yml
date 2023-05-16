@@ -1,0 +1,91 @@
+---
+# tasks file for debian_11_provision, установка docker + cri
+- name: Create directory /etc/apt/keyrings
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add GPG key Docker
+  ansible.builtin.shell:  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg --yes
+
+- name: Get dpkg architecture
+  shell: "dpkg --print-architecture"
+  register: architecture
+
+- name: Get lsb release
+  shell: "lsb_release -cs"
+  register: release_output
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch={{ architecture.stdout_lines | join }} signed-by=/etc/apt/trusted.gpg.d/docker.gpg] https://download.docker.com/linux/debian {{ release_output.stdout_lines | join }} stable"
+    state: present
+  register: docker_repo
+
+- name: Apt Update
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install Docker
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Download plugin cri-dockerd
+  get_url:
+    url: "https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.1/cri-dockerd-0.3.1.amd64.tgz"
+    dest: "/tmp/cri-dockerd.tgz"
+
+- name: Unpack cri-dockerd
+  unarchive:
+    src: "/tmp/cri-dockerd.tgz"
+    dest: "/tmp/"
+    copy: no
+
+- name: Copy unpacked bin cri-dockerd
+  copy:
+    dest: "/usr/local/bin/"
+    src: "/tmp/cri-dockerd/cri-dockerd"
+    force: no
+    remote_src: yes 
+    mode: 0660
+  register: copy_results
+
+- name: change alc on cri-dockerd
+  file:
+    path: "/usr/local/bin/cri-dockerd"
+    mode: "0755"
+
+- name: Download config file on cri-dockerd.service
+  get_url:
+    url: "https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.service"
+    dest: "/etc/systemd/system/cri-docker.service"
+
+- name: Download config file on cri-dockerd.socket
+  get_url:
+    url: "https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.socket"
+    dest: "/etc/systemd/system/cri-docker.socket"
+
+- name: Update cri-docker.service
+  ansible.builtin.shell:  "sed -i -e 's,/usr/bin/cri-dockerd,/usr/local/bin/cri-dockerd,' /etc/systemd/system/cri-docker.service"
+
+- name: daemon reload
+  systemd:
+    daemon_reload: yes
+
+- name: enable cri-docker.service
+  systemd:
+    name: cri-docker.service
+    enabled: yes
+    state: started
+
+- name: enable cri-dockerd.socket
+  systemd:
+    name: cri-docker.socket
+    enabled: yes
+    state: started

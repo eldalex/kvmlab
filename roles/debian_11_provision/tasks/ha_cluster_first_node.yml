@@ -1,0 +1,72 @@
+- name: Проверка был ли инициализирован кластер путём проверки нод
+  shell: kubectl get nodes
+  register: kubectl_output
+  ignore_errors: true
+
+- name: Вывод результата
+  debug:
+        var: kubectl_output
+  when: kubectl_output is defined
+
+- name: Инициализация кластера если проверка не определила наличие нод.
+  shell: kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint "172.30.0.210:8888" --upload-certs
+  register: init_output
+  become: true
+  when: kubectl_output.rc != 0
+  ignore_errors: true
+
+- name: Вывод init_output
+  debug:
+    var: init_output
+
+# - name: Тестим регулярки
+#   shell: echo "[init] Using Kubernetes version v1.27.1\n[preflight] Running pre-flight checks\n[preflight] Pulling images required for setting up a Kubernetes cluster\n[preflight] This might take a minute or two, depending on the speed of your internet connection\n[preflight] You can also perform this action in beforehand using 'kubeadm config images pull'\n[certs] Using certificateDir folder \"/etc/kubernetes/pki\"\n[certs] Generating \"ca\" certificate and key\n[certs] Generating \"apiserver\" certificate and key\n[certs] apiserver serving cert is signed for DNS names [kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local node1.internal] and IPs [10.96.0.1 172.30.0.201 172.30.0.210]\n[certs] Generating \"apiserver-kubelet-client\" certificate and key\n[certs] Generating \"front-proxy-ca\" certificate and key\n[certs] Generating \"front-proxy-client\" certificate and key\n[certs] Generating \"etcd/ca\" certificate and key\n[certs] Generating \"etcd/server\" certificate and key\n[certs] etcd/server serving cert is signed for DNS names [localhost node1.internal] and IPs [172.30.0.201 127.0.0.1 ::1]\n[certs] Generating \"etcd/peer\" certificate and key\n[certs] etcd/peer serving cert is signed for DNS names [localhost node1.internal] and IPs [172.30.0.201 127.0.0.1 ::1]\n[certs] Generating \"etcd/healthcheck-client\" certificate and key\n[certs] Generating \"apiserver-etcd-client\" certificate and key\n[certs] Generating \"sa\" key and public key\n[kubeconfig] Using kubeconfig folder \"/etc/kubernetes\"\n[kubeconfig] Writing \"admin.conf\" kubeconfig file\n[kubeconfig] Writing \"kubelet.conf\" kubeconfig file\n[kubeconfig] Writing \"controller-manager.conf\" kubeconfig file\n[kubeconfig] Writing \"scheduler.conf\" kubeconfig file\n[kubelet-start] Writing kubelet environment file with flags to file \"/var/lib/kubelet/kubeadm-flags.env\"\n[kubelet-start] Writing kubelet configuration to file \"/var/lib/kubelet/config.yaml\"\n[kubelet-start] Starting the kubelet\n[control-plane] Using manifest folder \"/etc/kubernetes/manifests\"\n[control-plane] Creating static Pod manifest for \"kube-apiserver\"\n[control-plane] Creating static Pod manifest for \"kube-controller-manager\"\n[control-plane] Creating static Pod manifest for \"kube-scheduler\"\n[etcd] Creating static Pod manifest for local etcd in \"/etc/kubernetes/manifests\"\n[wait-control-plane] Waiting for the kubelet to boot up the control plane as static Pods from directory \"/etc/kubernetes/manifests\". This can take up to 4m0s\n[kubelet-check] Initial timeout of 40s passed.\n[apiclient] All control plane components are healthy after 53.124539 seconds\n[upload-config] Storing the configuration used in ConfigMap \"kubeadm-config\" in the \"kube-system\" Namespace\n[kubelet] Creating a ConfigMap \"kubelet-config\" in namespace kube-system with the configuration for the kubelets in the cluster\n[upload-certs] Storing the certificates in Secret \"kubeadm-certs\" in the \"kube-system\" Namespace\n[upload-certs] Using certificate key:\nb04481fd5051c4df80bc2e5f1e80ab8ff39fea38378065469116f1587e9fe3c6\n[mark-control-plane] Marking the node node1.internal as control-plane by adding the labels [node-role.kubernetes.io/control-plane node.kubernetes.io/exclude-from-external-load-balancers]\n[mark-control-plane] Marking the node node1.internal as control-plane by adding the taints [node-role.kubernetes.io/control-plane:NoSchedule]\n[bootstrap-token] Using token fcn6z7.mlcgrusqigrrxcfp\n[bootstrap-token] Configuring bootstrap tokens, cluster-info ConfigMap, RBAC Roles\n[bootstrap-token] Configured RBAC rules to allow Node Bootstrap tokens to get nodes\n[bootstrap-token] Configured RBAC rules to allow Node Bootstrap tokens to post CSRs in order for nodes to get long term certificate credentials\n[bootstrap-token] Configured RBAC rules to allow the csrapprover controller automatically approve CSRs from a Node Bootstrap Token\n[bootstrap-token] Configured RBAC rules to allow certificate rotation for all node client certificates in the cluster\n[bootstrap-token] Creating the \"cluster-info\" ConfigMap in the \"kube-public\" namespace\n[kubelet-finalize] Updating \"/etc/kubernetes/kubelet.conf\" to point to a rotatable kubelet client certificate and key\n[addons] Applied essential addon CoreDNS\n[addons] Applied essential addon kube-proxy\n\nYour Kubernetes control-plane has initialized successfully!\n\nTo start using your cluster, you need to run the following as a regular user:\n\n  mkdir -p $HOME/.kube\n  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\n  sudo chown $(id -u):$(id -g) $HOME/.kube/config\n\nAlternatively, if you are the root user, you can run:\n\n  export KUBECONFIG=/etc/kubernetes/admin.conf\n\nYou should now deploy a pod network to the cluster.\nRun \"kubectl apply -f [podnetwork].yaml\" with one of the options listed at:\n  https://kubernetes.io/docs/concepts/cluster-administration/addons/\n\nYou can now join any number of the control-plane node running the following command on each as root:\n\n  kubeadm join 172.30.0.210:8888 --token fcn6z7.mlcgrusqigrrxcfp \\\n\t--discovery-token-ca-cert-hash sha256:58dfa285d7a91a537db669a1dc1323bf7c22382ef44dd4e7b439f6cf1041e07f \\\n\t--control-plane --certificate-key b04481fd5051c4df80bc2e5f1e80ab8ff39fea38378065469116f1587e9fe3c6\n\nPlease note that the certificate-key gives access to cluster sensitive data, keep it secret!\nAs a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use\n\"kubeadm init phase upload-certs --upload-certs\" to reload certs afterward.\n\nThen you can join any number of worker nodes by running the following on each as root:\n\nkubeadm join 172.30.0.210:8888 --token fcn6z7.mlcgrusqigrrxcfp \\\n\t--discovery-token-ca-cert-hash sha256:58dfa285d7a91a537db669a1dc1323bf7c22382ef44dd4e7b439f6cf1041e07f "
+#   register: init_output
+
+
+- name: Фильтрация символов
+  set_fact:
+    filtered_output: "{{ init_output.stdout | regex_replace('(\\n|\\t|\\\\n|\\\\)', ' ') }}"
+
+- name: Вывод filtered_output
+  debug:
+    var: filtered_output
+
+- name: Фильтр control_plane_join_command
+  set_fact:
+    control_plane_join_command: "{{ filtered_output | regex_search('kubeadm join(.*?--discovery-token-ca-cert-hash\\s+sha256:[\\w:]+.*?--control-plane.*?--certificate-key.*?[\\w:]+)')}}"
+    # _control_plane_join_command_node1: "{{ filtered_output | regex_search('kubeadm join(.*?--discovery-token-ca-cert-hash\\s+sha256:[\\w:]+.*?--control-plane.*?--certificate-key.*?[\\w:]+)')}}"
+    worker_join_command: "{{ filtered_output | regex_search('kubeadm join(.*?--discovery-token-ca-cert-hash\\s+sha256:[\\w:]+)')}}"
+    # _worker_join_command_node1: "{{ filtered_output | regex_search('kubeadm join(.*?--discovery-token-ca-cert-hash\\s+sha256:[\\w:]+)')}}"
+
+- name: Установка KUBECONFIG в enviroment
+  become: true
+  lineinfile:
+    dest: /etc/environment
+    line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+
+- name: Установка KUBECONFIG в bashrc
+  become: true
+  lineinfile:
+    dest: '~/.bashrc'
+    line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+
+- name: Подождем пока всё запустится
+  wait_for:
+    host: localhost
+    port: 6443
+    timeout: 300
+
+- name: Установка сетевого плагина Flannel
+  shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+# - name: Вывод filtered_output
+#   debug:
+#     var: control_plane_join_command
+
+# - name: Фильтр worker join command
+#   set_fact:
+
+# - name: Вывод worker_join_command
+#   debug:
+#     var: worker_join_command

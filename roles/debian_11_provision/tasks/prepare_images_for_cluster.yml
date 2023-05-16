@@ -1,0 +1,36 @@
+---
+# tasks file for debian_11_provision, создание  шаблона ВМ
+- name: Скачивание базового образа если его нет в хранилище
+  get_url:
+    url: "{{ base_image_url }}"
+    dest: "{{ libvirt_pool_images }}/{{ base_image_name }}"
+    checksum: "sha256:{{ base_image_sha }}"  
+
+- name: Создание копии базового образа, для шаблона
+  copy:
+    dest: "{{ libvirt_pool_images }}/template_with_common_settings.qcow2"
+    src: "{{ libvirt_pool_images }}/{{ base_image_name }}"
+    force: no
+    remote_src: yes 
+    mode: 0660
+  register: copy_results
+
+- name: Первичная настройка шаблона.
+  command: |
+    virt-customize -a {{ libvirt_pool_images }}/template_with_common_settings.qcow2 \
+    --root-password password:{{ vm_root_pass }} \
+    --ssh-inject 'root:file:{{ ssh_key }}' \
+    --uninstall cloud-init 
+    --append-line '/etc/hosts:172.30.0.201 node1.internal node1'
+    --append-line '/etc/hosts:172.30.0.202 node2.internal node2'
+    --append-line '/etc/hosts:172.30.0.203 node3.internal node3'
+    --append-line '/etc/hosts:172.30.0.204 node4.internal node4'
+    --append-line '/etc/hosts:172.30.0.205 node5.internal node5'
+    --run-command 'curl -fsSLo /etc/apt/trusted.gpg.d/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg'
+    --run-command 'echo "deb [signed-by=/etc/apt/trusted.gpg.d/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list'
+    --run-command 'apt update'
+    --run-command 'apt install -y curl wget gnupg sudo iptables tmux keepalived haproxy kubeadm kubectl'
+    --run-command 'echo 'overlay' > /etc/modules-load.d/k8s.conf && echo 'br_netfilter' >> /etc/modules-load.d/k8s.conf'
+    --run-command 'echo -e "net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nnet.ipv4.ip_forward = 1" > /etc/sysctl.d/10-k8s.conf'
+
+  when: copy_results is changed
