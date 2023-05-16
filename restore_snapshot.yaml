@@ -3,7 +3,7 @@
   become: true
 
   tasks:
-    - name: Получаем параметры для создания ВМ
+    - name: Получаем параметры (в целом нужны только имена.) ВМ
       include_vars:
         file: vm_names_debian.yml
         name: vm_info
