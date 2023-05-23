@@ -17,6 +17,6 @@ vm_names:
     cpu: 4
     ipaddr: 172.30.0.204
   - name: node5
-    cpu: 4
     memory: 3072
+    cpu: 4
     ipaddr: 172.30.0.205

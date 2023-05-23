@@ -1,0 +1,9 @@
+variant: ha-cluster #[all-in-one, ha-cluster]
+engine: container-d #[container-d, cri-o, docker]
+libvirt_pool_dir: "/home/alex/myStorage/storage_for_VMs/"
+libvirt_pool_images: "/home/alex/myStorage/iso_images/"
+vm_net: vmnet
+ssh_key: "/home/alex/.ssh/id_rsa.pub"
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+version: "1.26"
+os: "Debian_11"

@@ -3,11 +3,8 @@
   hosts: localhost
   gather_facts: yes
   become: yes
-  vars:
-    pool_dir: "/home/alex/myStorage/storage_for_VMs/"
-    net: vmnet
-    ssh_pub_key: "/home/alex/.ssh/id_rsa.pub"
-    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+  vars_files:
+    - my_vars.yml
 
   tasks:
     - name: Подготовка окружения
@@ -21,26 +18,21 @@
       include_vars:
         file: vm_names_debian.yml
         name: vm_info
-    
+
     - name: Подготовка шаблона для ВМ
       include_role:
         name: debian_11_provision
         tasks_from: prepare_images_for_cluster.yml
-      vars:
-        libvirt_pool_dir: "{{ pool_dir }}"
-        ssh_key: "{{ ssh_pub_key }}"
 
     - name: Создание ВМ нод из шаблонного образа.
       include_role:
         name: debian_11_provision
         tasks_from: create_nodes.yml
       vars:
-        libvirt_pool_dir: "{{ pool_dir }}"
         vm_name: "{{ item.name }}"
         vm_vcpus: "{{ item.cpu }}"
         vm_ram_mb: "{{ item.memory }}"
         ipaddr: "{{ item.ipaddr }}"
-        vm_net: "{{ net }}"
       with_items: "{{ vm_info.vm_names }}"
 
 - name: Проверка доступности ВМ
@@ -60,12 +52,12 @@
   gather_facts: true
   become: true
   remote_user: root
-  vars:
-    version: "1.26"
-    os: "Debian_11"
-    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-    engine: container-d # один вариант из:[cri-o, container-d, docker]
+  vars_files:
+    - my_vars.yml
   tasks:
+    - name: Синхронизация даты/времени с NTP сервером
+      shell: ntpdate 0.europe.pool.ntp.org
+
     - name: Установка cri-o
       include_role:
         name: debian_11_provision
@@ -105,11 +97,6 @@
   gather_facts: true
   become: true
   remote_user: root
-  vars:
-    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-    variant: ha-cluster
-    engine: container_d
-    hostname: "{{ inventory_hostname }}"
   tasks:
     - name: Установка all-in-one
       include_role:
@@ -117,11 +104,14 @@
         tasks_from: all_in_one.yml
       when: variant == "all-in-one"
 
-    - name: Установка ha-cluster
+    - name: Подготовка нод для ha-cluster
       include_role:
         name: debian_11_provision
         tasks_from: ha_cluster_prepare_managers.yml
       when: variant == "ha-cluster"
+
+    - name: Синхронизация даты/времени с NTP сервером
+      shell: ntpdate 0.europe.pool.ntp.org
 
     - name: Установка первой ноды
       include_role:
@@ -136,39 +126,66 @@
         control_plane_join_command: "{{ hostvars['node1']['control_plane_join_command'] }}"
         worker_join_command: "{{ hostvars['node1']['worker_join_command'] }}"
       when: variant == "ha-cluster" and inventory_hostname != 'node1'
+    - name: вывод команд подключения
+      debug:
+        msg: |
+          control_plane_join_command: {{ control_plane_join_command }}
+          worker_join_command: {{ worker_join_command }}
 
     - name: Использование команды control_plane_join_command
-      ansible.builtin.shell:
-        cmd: "{{ control_plane_join_command }}"
-      retries: 5
-      delay: 30
+      block:
+        - name: Подключение дополнительных нод для ['container-d', 'cri-o']
+          ansible.builtin.shell:
+            cmd: "{{ control_plane_join_command }}"
+          until: result.rc == 0
+          register: result
+          retries: 5
+          delay: 30
+          when: engine in ['container-d', 'cri-o']
+
+        - name: Подключение дополнительных нод для движка docker
+          ansible.builtin.shell:
+            cmd: "{{ control_plane_join_command }} --cri-socket unix:///var/run/cri-dockerd.sock"
+          until: result.rc == 0
+          register: result
+          retries: 5
+          delay: 30
+          when: engine == 'docker'
       when: variant == "ha-cluster" and inventory_hostname != 'node1' and inventory_hostname in groups['management']
-      loop: "{{ groups['management'] }}"
-      loop_control:
-        loop_var: management_host
-      delegate_to: "{{ management_host }}"
-      
+
+
     - name: Использование команды worker_join_command
-      ansible.builtin.shell:
-        cmd: "{{ worker_join_command }}"
-      retries: 5
-      delay: 30
+      block:
+        - name: Подключение рабочих нод для движков ['container-d', 'cri-o']
+          ansible.builtin.shell:
+            cmd: "{{ worker_join_command }}"
+          until: result.rc == 0
+          register: result
+          retries: 5
+          delay: 30
+          when: engine in ['container-d', 'cri-o']
+
+        - name: Подключение рабочих нод нод для движка docker
+          ansible.builtin.shell:
+            cmd: "{{ worker_join_command }} --cri-socket unix:///var/run/cri-dockerd.sock"
+          until: result.rc == 0
+          register: result
+          retries: 5
+          delay: 30
+          when: engine == 'docker'
       when: variant == "ha-cluster" and inventory_hostname != 'node1' and inventory_hostname in groups['workers']
 
-    - name: Перезагрузка всех машин
-      ansible.builtin.reboot:
-        reboot_timeout: 300
-
-- name: Скачивание конфига с первой ноды (подходит для обоих вариантов all-in-one и ha-cluster)
-  hosts: node1
-  remote_user: root
-  tasks:
-    - name: Скачать файл
+    - name: Скачивание конфига с первой ноды (подходит для обоих вариантов all-in-one и ha-cluster)
       ansible.builtin.fetch:
         src: /etc/kubernetes/admin.conf
         dest: /tmp/
         flat: yes
         force: yes
+      when: inventory_hostname == 'node1'
+
+    - name: Перезагрузка всех машин
+      ansible.builtin.reboot:
+        reboot_timeout: 300
 
 - name: Настройка хостовой машины, чтобы не лазить постоянно на виртуальные.
   hosts: localhost

@@ -1,41 +1,57 @@
 ---
 - name: Проверка был ли инициализирован кластер путём проверки нод
-  shell: kubectl get nodes
+  shell: "export KUBECONFIG=/etc/kubernetes/admin.conf && kubectl get nodes"
   register: kubectl_output
   ignore_errors: true
 
 - name: Инициализация кластера если проверка не определила наличие нод.
-  shell: kubeadm init --pod-network-cidr=10.244.0.0/16
-  register: kubeadm_output
-  become: true
+  block:
+    - name: Инициализация кластера для движков ['container-d', 'cri-o']
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+      when: engine in ['container-d', 'cri-o']
+      register: kubeadm_output
+
+    - name: Инициализация кластера для движка docker
+      shell: |
+        kubeadm init \
+               --pod-network-cidr=10.244.0.0/16 \
+               --cri-socket unix:///var/run/cri-dockerd.sock
+      when: engine == 'docker'
+      register: kubeadm_output
+
+    - name: Установка KUBECONFIG в enviroment
+      become: true
+      lineinfile:
+        dest: /etc/environment
+        line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+
+    - name: Установка KUBECONFIG в bashrc
+      become: true
+      lineinfile:
+        dest: '~/.bashrc'
+        line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+
+    - name: Подождем пока всё запустится
+      wait_for:
+        host: localhost
+        port: 6443
+        timeout: 300
+
+    - name: Установка сетевого плагина Flannel
+      shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+    - name: Снятие ограничения на запуск рабочих нагрузок c {{ ansible_hostname }}
+      shell: "kubectl taint nodes --all node-role.kubernetes.io/control-plane-"
+      become: true
+      register: taint_result
+      failed_when:
+        - "'error: taint \"node-role.kubernetes.io/control-plane\" not found' not in taint_result.stderr"
+        - "'node/' + ansible_hostname + '.internal untainted' not in taint_result.stdout"
   when: kubectl_output.rc != 0
-  ignore_errors: true
 
-- name: Установка KUBECONFIG в enviroment
-  become: true
-  lineinfile:
-    dest: /etc/environment
-    line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
-
-- name: Установка KUBECONFIG в bashrc
-  become: true
-  lineinfile:
-    dest: '~/.bashrc'
-    line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
-
-- name: Подождем пока всё запустится
-  wait_for:
-    host: localhost
-    port: 6443
-    timeout: 300
-
-- name: Установка сетевого плагина Flannel
-  shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-
-- name: Снятие ограничения на запуск рабочих нагрузок c {{ hostname }}
-  shell: kubectl taint nodes --all node-role.kubernetes.io/control-plane-
-  become: true
-  register: taint_result
-  failed_when: 
-    - "'error: taint \"node-role.kubernetes.io/control-plane\" not found' not in taint_result.stderr"
-    - "'node/{{ hostname }}.internal untainted' not in taint_result.stdout"
+- name: Инициализация уже завершена.
+  debug:
+    msg: 'Инициализация уже была завершена!\n
+    выполните комманду export KUBECONFIG=/etc/kubernetes/admin.conf\n
+    проверьте вывод команды kubectl get nodes'
+  when: kubectl_output.rc == 0
