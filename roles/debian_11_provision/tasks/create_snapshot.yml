@@ -7,4 +7,4 @@
 
 - name: Вывод результатов создания
   debug:
-    var: snapshot_create_status
+    var: snapshot_create_status.stdout_lines

@@ -63,11 +63,13 @@
         name: debian_11_provision
         tasks_from: install_crio.yml
       when: engine == "cri-o"
+
     - name: Установка container-d
       include_role:
         name: debian_11_provision
         tasks_from: install_container_d.yml
       when: engine == "container-d"
+
     - name: Установка docker cri
       include_role:
         name: debian_11_provision
@@ -102,7 +104,7 @@
       include_role:
         name: debian_11_provision
         tasks_from: all_in_one.yml
-      when: variant == "all-in-one"
+      when: variant == "all-in-one" and inventory_hostname == 'node1'
 
     - name: Подготовка нод для ha-cluster
       include_role:
@@ -121,20 +123,22 @@
       register: first_node_result
 
 
-    - name: Передача значения команды добавления первой ноды остальным нодам
+    - name: Передача команд на остальные ноды
       set_fact:
         control_plane_join_command: "{{ hostvars['node1']['control_plane_join_command'] }}"
         worker_join_command: "{{ hostvars['node1']['worker_join_command'] }}"
       when: variant == "ha-cluster" and inventory_hostname != 'node1'
+
     - name: вывод команд подключения
       debug:
         msg: |
           control_plane_join_command: {{ control_plane_join_command }}
           worker_join_command: {{ worker_join_command }}
+      when: variant == "ha-cluster"
 
     - name: Использование команды control_plane_join_command
       block:
-        - name: Подключение дополнительных нод для ['container-d', 'cri-o']
+        - name: Подключение управляющих нод для ['container-d', 'cri-o']
           ansible.builtin.shell:
             cmd: "{{ control_plane_join_command }}"
           until: result.rc == 0
@@ -143,7 +147,7 @@
           delay: 30
           when: engine in ['container-d', 'cri-o']
 
-        - name: Подключение дополнительных нод для движка docker
+        - name: Подключение управляющих нод для docker
           ansible.builtin.shell:
             cmd: "{{ control_plane_join_command }} --cri-socket unix:///var/run/cri-dockerd.sock"
           until: result.rc == 0
@@ -156,7 +160,7 @@
 
     - name: Использование команды worker_join_command
       block:
-        - name: Подключение рабочих нод для движков ['container-d', 'cri-o']
+        - name: Подключение рабочих нод для ['container-d', 'cri-o']
           ansible.builtin.shell:
             cmd: "{{ worker_join_command }}"
           until: result.rc == 0
@@ -165,7 +169,7 @@
           delay: 30
           when: engine in ['container-d', 'cri-o']
 
-        - name: Подключение рабочих нод нод для движка docker
+        - name: Подключение рабочих нод нод для docker
           ansible.builtin.shell:
             cmd: "{{ worker_join_command }} --cri-socket unix:///var/run/cri-dockerd.sock"
           until: result.rc == 0

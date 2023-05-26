@@ -11,8 +11,8 @@
                 --pod-network-cidr=10.244.0.0/16 \
                 --control-plane-endpoint "172.30.0.210:8888" \
                 --upload-certs
-      when: engine in ['container-d', 'cri-o']
       register: init_output_containerd_crio
+      when: engine in ['container-d', 'cri-o']
 
 
     - name: Инициализация кластера для движка ['docker']
@@ -22,12 +22,12 @@
                 --pod-network-cidr=10.244.0.0/16 \
                 --control-plane-endpoint "172.30.0.210:8888" \
                 --upload-certs
-      when: engine == 'docker'
       register: init_output_docker
+      when: engine == 'docker'
 
     - name: Сохранение значения init_output для дальнейшего использования
       set_fact:
-        init_output: "{{ init_output_containerd_crio|default(init_output_docker) }}"
+        init_output: "{{ init_output_containerd_crio if init_output_containerd_crio is defined and init_output_containerd_crio.stdout is defined else init_output_docker }}"
 
     - name: Фильтрация вывода kubeadm init
       set_fact:

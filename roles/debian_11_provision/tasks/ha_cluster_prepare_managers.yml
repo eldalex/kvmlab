@@ -1,13 +1,4 @@
-- name: Тестовый старт роли, вывод whoami
-  command: "whoami"
-  register: result_whoami
-
-- name: Вывод result_whoami
-  debug:
-        var: result_whoami.stdout_lines
-  when: result_whoami is defined
-
-- name: Копируем настройку демона keepalived 
+- name: Копируем настройку демона keepalived
   template:
     src: templates/keepalived.conf.j2
     dest: /etc/keepalived/keepalived.conf
