@@ -1,5 +1,5 @@
 ---
-# tasks file for debian_11_provision, установка docker + cri
+# tasks file for driver_provision, установка docker + cri
 - name: Create directory /etc/apt/keyrings
   file:
     path: /etc/apt/keyrings

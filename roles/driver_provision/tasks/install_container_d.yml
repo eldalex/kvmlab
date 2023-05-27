@@ -1,5 +1,5 @@
 ---
-# tasks file for debian_11_provision, установка container-d
+# tasks file for driver_provision, установка container-d
 - name: Скачиваем containerd
   get_url:
     url: "https://github.com/containerd/containerd/releases/download/v1.7.0/containerd-1.7.0-linux-amd64.tar.gz"

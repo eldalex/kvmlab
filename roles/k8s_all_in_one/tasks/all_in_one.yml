@@ -1,10 +1,10 @@
 ---
-- name: Проверка был ли инициализирован кластер путём проверки нод
-  shell: "export KUBECONFIG=/etc/kubernetes/admin.conf && kubectl get nodes"
-  register: kubectl_output
-  ignore_errors: true
+- name: Проверка наличия файла конфига
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: file_info
 
-- name: Инициализация кластера если проверка не определила наличие нод.
+- name: Инициализация кластера если конфиг не обнаружен.
   block:
     - name: Инициализация кластера для движков ['container-d', 'cri-o']
       shell: kubeadm init --pod-network-cidr=10.244.0.0/16
@@ -47,11 +47,14 @@
       failed_when:
         - "'error: taint \"node-role.kubernetes.io/control-plane\" not found' not in taint_result.stderr"
         - "'node/' + ansible_hostname + '.internal untainted' not in taint_result.stdout"
-  when: kubectl_output.rc != 0
+  when: not file_info.stat.exists
 
-- name: Инициализация уже завершена.
+- name: Проверка инициализации
+  shell: "export KUBECONFIG=/etc/kubernetes/admin.conf && kubectl get nodes"
+  register: kubectl_output
+  ignore_errors: true
+
+- name: Инициализация завершена.
   debug:
-    msg: 'Инициализация уже была завершена!\n
-    выполните комманду export KUBECONFIG=/etc/kubernetes/admin.conf\n
-    проверьте вывод команды kubectl get nodes'
+    msg: 'Инициализация завершена! выполните комманду export KUBECONFIG=/etc/kubernetes/admin.conf, проверьте вывод команды kubectl get nodes'
   when: kubectl_output.rc == 0

@@ -1,3 +1,6 @@
+- name: Синхронизация даты/времени с NTP сервером
+  shell: ntpdate 0.europe.pool.ntp.org
+
 - name: Копируем настройку демона keepalived
   template:
     src: templates/keepalived.conf.j2

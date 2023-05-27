@@ -1,9 +1,9 @@
-- name: Проверка был ли инициализирован кластер путём проверки нод
-  shell: "export KUBECONFIG=/etc/kubernetes/admin.conf && kubectl get nodes"
-  register: kubectl_output
-  ignore_errors: true
+- name: Проверка наличия файла конфига
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: file_info
 
-- name: Инициализация кластера если проверка не определила наличие нод.
+- name: Инициализация кластера если конфиг не обнаружен.
   block:
     - name: Инициализация кластера для движков ['container-d', 'cri-o']
       shell: |
@@ -57,4 +57,4 @@
     - name: Установка сетевого плагина Flannel
       shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
 
-  when: kubectl_output.rc != 0
+  when: not file_info.stat.exists

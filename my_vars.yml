@@ -1,5 +1,5 @@
-variant: ha-cluster #[all-in-one, ha-cluster]
-engine: container-d #[container-d, cri-o, docker]
+variant: all-in-one #[all-in-one, ha-cluster]
+engine: cri-o #[container-d, cri-o, docker]
 libvirt_pool_dir: "/home/alex/myStorage/storage_for_VMs/"
 libvirt_pool_images: "/home/alex/myStorage/iso_images/"
 vm_net: vmnet
@@ -7,3 +7,25 @@ ssh_key: "/home/alex/.ssh/id_rsa.pub"
 ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
 version: "1.26"
 os: "Debian_11"
+vm_info:
+  vm_names:
+    - name: node1
+      memory: 2048
+      cpu: 2
+      ipaddr: 172.30.0.201
+    - name: node2
+      memory: 2048
+      cpu: 2
+      ipaddr: 172.30.0.202
+    - name: node3
+      memory: 2048
+      cpu: 2
+      ipaddr: 172.30.0.203
+    - name: node4
+      memory: 3072
+      cpu: 4
+      ipaddr: 172.30.0.204
+    - name: node5
+      memory: 3072
+      cpu: 4
+      ipaddr: 172.30.0.205

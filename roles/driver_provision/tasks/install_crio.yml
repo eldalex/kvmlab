@@ -1,5 +1,5 @@
 ---
-# tasks file for debian_11_provision, установка cri-o
+# tasks file for driver_provision, установка cri-o
 - name: Установка ключа репозитория cri-o
   apt_key:
     url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/{{ version }}/{{ os }}/Release.key

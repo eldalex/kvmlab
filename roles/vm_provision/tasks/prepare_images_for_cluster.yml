@@ -1,5 +1,5 @@
 ---
-# tasks file for debian_11_provision, создание  шаблона ВМ
+# tasks file vm_provision, создание  шаблона ВМ
 - name: Скачивание базового образа если его нет в хранилище
   get_url:
     url: "{{ base_image_url }}"
@@ -21,15 +21,11 @@
     --root-password password:{{ vm_root_pass }} \
     --ssh-inject 'root:file:{{ ssh_key }}' \
     --uninstall cloud-init \
-    --append-line '/etc/hosts:172.30.0.201 node1.internal node1' \
-    --append-line '/etc/hosts:172.30.0.202 node2.internal node2' \
-    --append-line '/etc/hosts:172.30.0.203 node3.internal node3' \
-    --append-line '/etc/hosts:172.30.0.204 node4.internal node4' \
-    --append-line '/etc/hosts:172.30.0.205 node5.internal node5' \
-    --run-command 'curl -fsSLo /etc/apt/trusted.gpg.d/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg' \
-    --run-command 'echo "deb [signed-by=/etc/apt/trusted.gpg.d/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list' \
-    --run-command 'apt update' \
-    --run-command 'apt install -y curl wget gnupg sudo iptables tmux keepalived haproxy kubeadm kubectl ntpdate' \
+    --run-command 'apt update && apt install -y ntpdate gnupg gnupg2 curl software-properties-common wget keepalived haproxy' \
+    --append-line '/etc/hosts:172.30.0.201 node1.internal node1\n172.30.0.202 node2.internal node2\n172.30.0.203 node3.internal node3\n172.30.0.204 node4.internal node4\n172.30.0.205 node5.internal node5' \
+    --run-command 'curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmour -o /etc/apt/trusted.gpg.d/cgoogle.gpg' \
+    --run-command 'apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"' \
+    --run-command 'apt update && apt install -y kubeadm kubectl' \
     --run-command 'echo 'overlay' > /etc/modules-load.d/k8s.conf && echo 'br_netfilter' >> /etc/modules-load.d/k8s.conf' \
     --run-command 'echo -e "net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nnet.ipv4.ip_forward = 1" > /etc/sysctl.d/10-k8s.conf'
 

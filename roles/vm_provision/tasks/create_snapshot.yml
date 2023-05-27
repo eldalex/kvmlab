@@ -1,0 +1,6 @@
+---
+# tasks file for vm_provision, создание снапшотов
+- name: Создание снапшота {{ snapshot_name }}
+  shell: "virsh snapshot-create-as --domain {{ vm_name }} --name {{ snapshot_name }} --description '{{ snapshot_description }}'"
+  register: snapshot_create_status
+  ignore_errors: true

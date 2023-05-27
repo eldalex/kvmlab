@@ -2,12 +2,9 @@
   - name: Удаление стенда kubernetes
     hosts: localhost
     become: true
+    vars_files:
+      - my_vars.yml
     tasks:
-      - name: Получаем параметры (в целом нужны только имена.) ВМ
-        include_vars:
-          file: vm_names_debian.yml
-          name: vm_info
-
       - name: Получаем список существующих ВМ
         community.libvirt.virt:
           command: list_vms
@@ -22,9 +19,12 @@
               name: "{{ item.name }}"
             loop: "{{ vm_info.vm_names }}"
             when: "item.name in existing_vms.list_vms"
+            ignore_errors: true
 
           - name: Удаляем снапшоты
-            shell: "virsh snapshot-delete --domain {{ item.name }} --snapshotname start"
+            shell: |
+              virsh snapshot-delete --domain {{ item.name }} --snapshotname host_provision
+              virsh snapshot-delete --domain {{ item.name }} --snapshotname driver_provision
             ignore_errors: true
             loop: "{{ vm_info.vm_names }}"
             when: "item.name in existing_vms.list_vms"

@@ -1,5 +1,5 @@
 ---
-# tasks file for debian_11_provision, создание нод
+# tasks file for vm_provision, создание нод
 - name: Получаем список существующих ВМ
   community.libvirt.virt:
     command: list_vms
