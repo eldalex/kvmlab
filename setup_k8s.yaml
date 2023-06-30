@@ -11,6 +11,11 @@
           - python3-libvirt
         state: present
 
+    - name: Настройка сети
+      include_role:
+        name: vm_provision
+        tasks_from: create_network.yml
+
     - name: Подготовка шаблона для ВМ
       include_role:
         name: vm_provision

@@ -1,0 +1,31 @@
+---
+# tasks file for vm_provision, пересоздание сети
+
+- name: Получение списка сетей KVM
+  command: virsh net-list --all
+  register: net_list_output
+
+- name: Проверка наличия сети {{ vm_net }}
+  shell: echo "{{ net_list_output.stdout }}" | grep -w "{{ vm_net }}"
+  register: network_check
+  ignore_errors: true
+
+- name: Создание и настройка сети {{ vm_net }}
+  block:
+    - name: Копирование шаблона сети
+      template:
+        src: vm_network.xml.j2
+        dest: /tmp/vm_network.xml
+
+    - name: Создание сети {{ vm_net }}
+      command: virsh net-define /tmp/vm_network.xml
+
+    - name: Запуск сети {{ vm_net }}
+      command: virsh net-start {{ vm_net }}
+
+    - name: Автостарт сети {{ vm_net }}
+      command: virsh net-autostart {{ vm_net }}
+  when: network_check.rc != 0
+
+-
+
