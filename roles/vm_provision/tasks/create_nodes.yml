@@ -1,5 +1,11 @@
 ---
 # tasks file for vm_provision, создание нод
+- name: Создание каталога {{ libvirt_pool_dir }} если не существует.
+  file:
+    path: "{{ libvirt_pool_dir }}"
+    state: directory
+    mode: 0755
+
 - name: Получаем список существующих ВМ
   community.libvirt.virt:
     command: list_vms

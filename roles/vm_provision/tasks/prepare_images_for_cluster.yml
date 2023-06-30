@@ -1,5 +1,11 @@
 ---
 # tasks file vm_provision, создание  шаблона ВМ
+- name: Создание каталога {{ libvirt_pool_images }} если не существует.
+  file:
+    path: "{{ libvirt_pool_images }}"
+    state: directory
+    mode: 0755
+
 - name: Скачивание базового образа если его нет в хранилище
   get_url:
     url: "{{ base_image_url }}"

@@ -1,7 +1,7 @@
-variant: ha-cluster #[all-in-one, ha-cluster]
+variant: all-in-one #[all-in-one, ha-cluster]
 engine: cri-o #[container-d, cri-o, docker]
-libvirt_pool_dir: "/home/alex/myStorage/storage_for_VMs/"
-libvirt_pool_images: "/home/alex/myStorage/iso_images/"
+libvirt_pool_dir: "/home/alex/myStorage/storage_for_VMss"
+libvirt_pool_images: "/home/alex/myStorage/iso_imagess"
 vm_net: k8s_net
 ssh_key: "/home/alex/.ssh/id_rsa.pub"
 ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
